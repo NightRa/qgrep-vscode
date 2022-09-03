@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { MirrorFs } from './mirrorFs';
 
 export class QGrepSearchProvider implements vscode.TextSearchProvider
 {
@@ -15,10 +16,14 @@ export function activate(context: vscode.ExtensionContext) {
 	
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
+	console.log('Congratulations, your extension "qgrep-code" is now active!');
+
 	let extDesc = context.extension.packageJSON;
 	extDesc['enabledApiProposals'] = ["textSearchProvider"];
 
-	console.log('Congratulations, your extension "qgrep-code" is now active!');
+	const mirrorFs = new MirrorFs();
+	context.subscriptions.push(
+		vscode.workspace.registerFileSystemProvider('mirror', mirrorFs, { isCaseSensitive: false, isReadonly: true }));
 
 	let textSearchProviderDisposable = vscode.workspace.registerTextSearchProvider("qgrep", new QGrepSearchProvider());
 
@@ -29,6 +34,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// The code you place here will be executed every time your command is executed
 		// Display a message box to the user
 		vscode.window.showInformationMessage('Hello World from qgrep-code!');
+		vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('mirror://sample/'), name: 'MirrorFS - C:\\' });
 	});
 
 	context.subscriptions.push(textSearchProviderDisposable);
