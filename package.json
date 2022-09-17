@@ -14,11 +14,17 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:qgrep-code.loadQGrepProject"
+    "onCommand:qgrep-code.initWorkspace",
+    "onCommand:qgrep-code.loadQGrepProject",
+    "onFileSystem:mirror"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "qgrep-code.initWorkspace",
+        "title": "QGrep: Init workspace"
+      },
       {
         "command": "qgrep-code.loadQGrepProject",
         "title": "QGrep: Load project"

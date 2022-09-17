@@ -117,16 +117,31 @@ async function getRootPath(projectFile: vscode.Uri): Promise<string | undefined>
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	
 	let extDesc = context.extension.packageJSON;
 	extDesc['enabledApiProposals'] = ["textSearchProvider"];
 
-	let commandDisposable = vscode.commands.registerCommand('qgrep-code.loadQGrepProject', () => {
+	let qgrepWorkspacePath = vscode.Uri.parse('mirror://qgrep/');
+
+	context.subscriptions.push(vscode.commands.registerCommand('qgrep-code.initWorkspace', () => {
+		vscode.workspace.updateWorkspaceFolders(0, vscode.workspace.workspaceFolders?.length, {
+			uri: qgrepWorkspacePath,
+			name: `QGrepFS`
+		});
+		// This may kill our extension, but we'll get re-activated because we handle the 'mirror' scheme - specified in package.json
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('qgrep-code.loadQGrepProject', () => {
 		if (initialized)
 		{
 			vscode.window.showErrorMessage("QGrep workspace already initialized. Try loading a project in a new window.");
 			return;
 		}
+		if (!vscode.workspace.getWorkspaceFolder(qgrepWorkspacePath))
+		{
+			vscode.window.showErrorMessage("Please run the QGrep: Initialize workspace command first.");
+			return;
+		}
+
 		initialized = true;
 
 		vscode.window.showOpenDialog({
@@ -156,15 +171,13 @@ export function activate(context: vscode.ExtensionContext) {
 					vscode.workspace.registerTextSearchProvider('mirror',
 					new QGrepSearchProvider(qgrepProjectPath.fsPath, rootPath)));
 
-				vscode.workspace.updateWorkspaceFolders(0, 0, {
-					uri: vscode.Uri.parse('mirror://qgrep/'),
+				vscode.workspace.updateWorkspaceFolders(0, 1, {
+					uri: qgrepWorkspacePath,
 					name: `QGrepFS - ${rootPath}`
 				});
 			}
 		});
-	});
-
-	context.subscriptions.push(commandDisposable);
+	}));
 }
 
 // this method is called when your extension is deactivated
