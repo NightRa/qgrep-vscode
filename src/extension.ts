@@ -9,10 +9,9 @@ import { MirrorFs } from './mirrorFs';
 import { processQuery } from './regexUtils';
 import { StreamingLines } from './StreamingLines';
 import { homedir } from 'os';
+import * as qgrep from 'npm-qgrep';
 
 export type Maybe<T> = T | null | undefined;
-
-const qgrepBinPath = "C:\\bin\\qgrep.exe";
 
 var initialized = false;
 
@@ -41,7 +40,7 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 
 			let streamingLines = new StreamingLines();
 
-			let qgrepProc: Maybe<cp.ChildProcess> = cp.spawn(qgrepBinPath, args, { cwd: this.rootPath });
+			let qgrepProc: Maybe<cp.ChildProcess> = cp.spawn(qgrep.qgrepPath, args, { cwd: this.rootPath });
 			qgrepProc.on('error', e => {
 				console.error(e);
 				reject(new Error(JSON.stringify({ message:  e && e.message, code: qgrepProc?.exitCode })));
