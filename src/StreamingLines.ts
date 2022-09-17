@@ -12,6 +12,18 @@ export class StreamingLines extends EventEmitter {
         return this;
     }
 
+    public static bytesToLinesArray(buf: Buffer): string[] {
+        let lines = new StreamingLines();
+        var linesArr: string[] = [];
+
+        lines.on('line', line => { linesArr.push(line); });
+
+        lines.write(buf);
+        lines.end();
+
+        return linesArr;
+    }
+
     public end(): void {
         this.handleDecodedData(this.stringDecoder.end());
     }

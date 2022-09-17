@@ -14,11 +14,12 @@ export type Maybe<T> = T | null | undefined;
 
 const qgrepBinPath = "C:\\bin\\qgrep.exe";
 
-var qgrepProject = "";
-const rootPath = "C:\\";
+var initialized = false;
 
 export class QGrepSearchProvider implements vscode.TextSearchProvider
 {
+	constructor(private qgrepProjectPath: string, private rootPath: string) {}
+
 	provideTextSearchResults(query: vscode.TextSearchQuery, options: vscode.TextSearchOptions, progress: vscode.Progress<vscode.TextSearchResult>, token: vscode.CancellationToken): vscode.ProviderResult<vscode.TextSearchComplete> {
 		return new Promise((resolve, reject) => {
 			// const cwd = options.folder.fsPath;
@@ -35,12 +36,12 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 				qgrepOptions += "l"; // Literal
 			}
 
-			let args = ["search", qgrepProject, qgrepOptions, processedQuery.pattern];
+			let args = ["search", this.qgrepProjectPath, qgrepOptions, processedQuery.pattern];
 			console.log("qgrep args: " + args);
 
 			let streamingLines = new StreamingLines();
 
-			let qgrepProc: Maybe<cp.ChildProcess> = cp.spawn(qgrepBinPath, args, { cwd: rootPath });
+			let qgrepProc: Maybe<cp.ChildProcess> = cp.spawn(qgrepBinPath, args, { cwd: this.rootPath });
 			qgrepProc.on('error', e => {
 				console.error(e);
 				reject(new Error(JSON.stringify({ message:  e && e.message, code: qgrepProc?.exitCode })));
@@ -90,7 +91,7 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 				let previewText = line.substring(indices[3] + 1);
 
 				let match = {
-					uri: MirrorFs.toMirrorUri(fileName, options.folder.authority, rootPath),
+					uri: MirrorFs.toMirrorUri(fileName, options.folder.authority, this.rootPath),
 					ranges: [new vscode.Range(lineNumber - 1, startColumn - 1, lineNumber - 1, endColumn - 1)],
 					preview: {text: previewText, matches: [new vscode.Range(0, startColumn - 1, 0, endColumn - 1)]}
 				};
@@ -101,6 +102,19 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 	}
 }
 
+async function getRootPath(projectFile: vscode.Uri): Promise<string | undefined> {
+	let projectFileContents = await vscode.workspace.fs.readFile(projectFile);
+	let lines = StreamingLines.bytesToLinesArray(Buffer.from(projectFileContents));
+	
+	// We assume we only have one root directory, and that the path is explicit.
+	let pathLine = lines.find(line => line.trim().startsWith("path"));
+	if (!pathLine) {
+		return undefined;
+	}
+
+	return pathLine.substring("path ".length).trim();
+}
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -108,13 +122,14 @@ export function activate(context: vscode.ExtensionContext) {
 	let extDesc = context.extension.packageJSON;
 	extDesc['enabledApiProposals'] = ["textSearchProvider"];
 
-	const mirrorFs = new MirrorFs("qgrep", rootPath);
-	context.subscriptions.push(
-		vscode.workspace.registerFileSystemProvider('mirror', mirrorFs, { isCaseSensitive: false, isReadonly: true }));
-
-	let textSearchProviderDisposable = vscode.workspace.registerTextSearchProvider("mirror", new QGrepSearchProvider());
-
 	let commandDisposable = vscode.commands.registerCommand('qgrep-code.loadQGrepProject', () => {
+		if (initialized)
+		{
+			vscode.window.showErrorMessage("QGrep workspace already initialized. Try loading a project in a new window.");
+			return;
+		}
+		initialized = true;
+
 		vscode.window.showOpenDialog({
 			defaultUri: vscode.Uri.file(path.join(homedir(), ".qgrep")),
 			canSelectMany: false,
@@ -122,10 +137,26 @@ export function activate(context: vscode.ExtensionContext) {
 				'QGrep Configuration': ['cfg']
 			},
 			title: "Choose QGrep configuration file"
-		}).then(result => {
+		}).then(async result => {
 			if (result)
 			{
-				qgrepProject = result[0].fsPath;
+				let qgrepProjectPath = result[0];
+				let rootPath = await getRootPath(qgrepProjectPath);
+				if (!rootPath)
+				{
+					vscode.window.showErrorMessage(`Root path not found in QGrep project file ${qgrepProjectPath.fsPath}`);
+					return;
+				}
+
+				const mirrorFs = new MirrorFs("qgrep", rootPath);
+				context.subscriptions.push(
+					vscode.workspace.registerFileSystemProvider('mirror',
+					mirrorFs, { isCaseSensitive: false, isReadonly: true }));
+
+				context.subscriptions.push(
+					vscode.workspace.registerTextSearchProvider('mirror',
+					new QGrepSearchProvider(qgrepProjectPath.fsPath, rootPath)));
+
 				vscode.workspace.updateWorkspaceFolders(0, 0, {
 					uri: vscode.Uri.parse('mirror://qgrep/'),
 					name: `QGrepFS - ${rootPath}`
@@ -134,7 +165,6 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 	});
 
-	context.subscriptions.push(textSearchProviderDisposable);
 	context.subscriptions.push(commandDisposable);
 }
 
