@@ -6,6 +6,7 @@ import { Console } from 'console';
 import { StringDecoder } from 'string_decoder';
 import { MirrorFs } from './mirrorFs';
 import { processQuery } from './regexUtils';
+import { StreamingLines } from './StreamingLines';
 
 export type Maybe<T> = T | null | undefined;
 
@@ -34,8 +35,7 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 			let args = ["search", qgrepProject, qgrepOptions, processedQuery.pattern];
 			console.log("qgrep args: " + args);
 
-			let decoder = new StringDecoder();
-			var output = "";
+			let streamingLines = new StreamingLines();
 
 			let qgrepProc: Maybe<cp.ChildProcess> = cp.spawn(qgrepBinPath, args, { cwd: rootPath });
 			qgrepProc.on('error', e => {
@@ -49,42 +49,42 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 			});
 
 			qgrepProc.stdout!.on('data', data => {
-				output += decoder.write(data);
+				streamingLines.write(data);
 			});
 
 			qgrepProc.on('close', () => {
-				output += decoder.end();
-				let resultLines = output.split(/\r?\n/);
-				resultLines.forEach(line => {
-					var indices = [];
-					for (var i = 0; i < line.length; i++) {
-						if (line[i] === ":") {
-							indices.push(i);
-						}
-					}
-
-					if (indices[0] === 1) { // C:\ for example
-						indices.shift();
-					}
-
-					let fileName = line.substring(0, indices[0]);
-					let lineNumber = parseInt(line.substring(indices[0] + 1, indices[1]));
-					let startColumn = parseInt(line.substring(indices[1] + 1, indices[2]));
-					let endColumn = parseInt(line.substring(indices[2] + 1, indices[3]));
-					let previewText = line.substring(indices[3] + 1);
-
-					let match = {
-						uri: MirrorFs.toMirrorUri(fileName, "qgrep", rootPath),
-						ranges: [new vscode.Range(lineNumber - 1, startColumn - 1, lineNumber - 1, endColumn)],
-						preview: {text: previewText, matches: [new vscode.Range(0, startColumn - 1, 0, endColumn)]}
-					};
-
-					progress.report(match);
-				});
+				streamingLines.end();
 
 				resolve({
 					limitHit: false
 				});
+			});
+
+			streamingLines.on('line', line => {
+				var indices = [];
+				for (var i = 0; i < line.length; i++) {
+					if (line[i] === ":") {
+						indices.push(i);
+					}
+				}
+
+				if (indices[0] === 1) { // C:\ for example
+					indices.shift();
+				}
+
+				let fileName = line.substring(0, indices[0]);
+				let lineNumber = parseInt(line.substring(indices[0] + 1, indices[1]));
+				let startColumn = parseInt(line.substring(indices[1] + 1, indices[2]));
+				let endColumn = parseInt(line.substring(indices[2] + 1, indices[3]));
+				let previewText = line.substring(indices[3] + 1);
+
+				let match = {
+					uri: MirrorFs.toMirrorUri(fileName, options.folder.authority, rootPath),
+					ranges: [new vscode.Range(lineNumber - 1, startColumn - 1, lineNumber - 1, endColumn)],
+					preview: {text: previewText, matches: [new vscode.Range(0, startColumn - 1, 0, endColumn)]}
+				};
+
+				progress.report(match);
 			});
 		});
 	}
@@ -114,7 +114,10 @@ export function activate(context: vscode.ExtensionContext) {
 		// The code you place here will be executed every time your command is executed
 		// Display a message box to the user
 		vscode.window.showInformationMessage('Hello World from qgrep-code!');
-		vscode.workspace.updateWorkspaceFolders(0, 0, { uri: vscode.Uri.parse('mirror://qgrep/'), name: `MirrorFS - ${rootPath}` });
+		vscode.workspace.updateWorkspaceFolders(0, 0, {
+			uri: vscode.Uri.parse('mirror://qgrep/'),
+			 name: `QGrepFS - ${rootPath}`
+		});
 	});
 
 	context.subscriptions.push(textSearchProviderDisposable);
