@@ -22,7 +22,7 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 			let processedQuery = processQuery(query, options);
 
 			let qgrepOptions = "HDCE";
-			if (query.isCaseSensitive)
+			if (!query.isCaseSensitive)
 			{
 				qgrepOptions += "i";
 			}
@@ -52,15 +52,23 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 				streamingLines.write(data);
 			});
 
+			var numResults = 0;
+			var limitHit = false;
 			qgrepProc.on('close', () => {
 				streamingLines.end();
 
-				resolve({
-					limitHit: false
-				});
+				resolve({ limitHit });
 			});
 
 			streamingLines.on('line', line => {
+				if (numResults > options.maxResults)
+				{
+					limitHit = true;
+					return;
+				}
+
+				numResults++;
+
 				var indices = [];
 				for (var i = 0; i < line.length; i++) {
 					if (line[i] === ":") {
