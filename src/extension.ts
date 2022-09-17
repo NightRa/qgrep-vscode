@@ -2,17 +2,20 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as path from 'path';
 import { Console } from 'console';
 import { StringDecoder } from 'string_decoder';
 import { MirrorFs } from './mirrorFs';
 import { processQuery } from './regexUtils';
 import { StreamingLines } from './StreamingLines';
+import { homedir } from 'os';
 
 export type Maybe<T> = T | null | undefined;
 
-const rootPath = "C:\\";
 const qgrepBinPath = "C:\\bin\\qgrep.exe";
-const qgrepProject = "test";
+
+var qgrepProject = "";
+const rootPath = "C:\\";
 
 export class QGrepSearchProvider implements vscode.TextSearchProvider
 {
@@ -88,8 +91,8 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 
 				let match = {
 					uri: MirrorFs.toMirrorUri(fileName, options.folder.authority, rootPath),
-					ranges: [new vscode.Range(lineNumber - 1, startColumn - 1, lineNumber - 1, endColumn)],
-					preview: {text: previewText, matches: [new vscode.Range(0, startColumn - 1, 0, endColumn)]}
+					ranges: [new vscode.Range(lineNumber - 1, startColumn - 1, lineNumber - 1, endColumn - 1)],
+					preview: {text: previewText, matches: [new vscode.Range(0, startColumn - 1, 0, endColumn - 1)]}
 				};
 
 				progress.report(match);
@@ -102,10 +105,6 @@ export class QGrepSearchProvider implements vscode.TextSearchProvider
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 	
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "qgrep-code" is now active!');
-
 	let extDesc = context.extension.packageJSON;
 	extDesc['enabledApiProposals'] = ["textSearchProvider"];
 
@@ -115,16 +114,23 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let textSearchProviderDisposable = vscode.workspace.registerTextSearchProvider("mirror", new QGrepSearchProvider());
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let commandDisposable = vscode.commands.registerCommand('qgrep-code.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from qgrep-code!');
-		vscode.workspace.updateWorkspaceFolders(0, 0, {
-			uri: vscode.Uri.parse('mirror://qgrep/'),
-			 name: `QGrepFS - ${rootPath}`
+	let commandDisposable = vscode.commands.registerCommand('qgrep-code.loadQGrepProject', () => {
+		vscode.window.showOpenDialog({
+			defaultUri: vscode.Uri.file(path.join(homedir(), ".qgrep")),
+			canSelectMany: false,
+			filters: {
+				'QGrep Configuration': ['cfg']
+			},
+			title: "Choose QGrep configuration file"
+		}).then(result => {
+			if (result)
+			{
+				qgrepProject = result[0].fsPath;
+				vscode.workspace.updateWorkspaceFolders(0, 0, {
+					uri: vscode.Uri.parse('mirror://qgrep/'),
+					name: `QGrepFS - ${rootPath}`
+				});
+			}
 		});
 	});
 

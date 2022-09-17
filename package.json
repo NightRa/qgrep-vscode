@@ -10,14 +10,14 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:qgrep-code.helloWorld"
+    "onCommand:qgrep-code.loadQGrepProject"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "qgrep-code.helloWorld",
-        "title": "QGrep-code plugin action"
+        "command": "qgrep-code.loadQGrepProject",
+        "title": "QGrep: Load project"
       }
     ]
   },
